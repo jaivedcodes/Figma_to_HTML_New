@@ -104,7 +104,7 @@ export async function runGeneration(
 
   try {
     emitInfo('Fetching desktop file…');
-    desktopFile = await withTimeout(client.getFile(desktopInfo.fileKey), 60_000, 'Desktop file fetch timed out (60s)');
+    desktopFile = await withTimeout(client.getFile(desktopInfo.fileKey), 120_000, 'Desktop file fetch timed out (120s)');
     emitOk(`Desktop: "${desktopFile.name}"`);
   } catch (e: any) {
     throw new Error(friendlyFetchError(e, 'desktop'));
@@ -112,7 +112,7 @@ export async function runGeneration(
 
   try {
     emitInfo('Fetching mobile file…');
-    mobileFile = await withTimeout(client.getFile(mobileInfo.fileKey), 60_000, 'Mobile file fetch timed out (60s)');
+    mobileFile = await withTimeout(client.getFile(mobileInfo.fileKey), 120_000, 'Mobile file fetch timed out (120s)');
     emitOk(`Mobile: "${mobileFile.name}"`);
   } catch (e: any) {
     throw new Error(friendlyFetchError(e, 'mobile'));
