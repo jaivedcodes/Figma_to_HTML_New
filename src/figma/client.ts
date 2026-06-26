@@ -20,7 +20,7 @@ export class FigmaClient {
     const params: Record<string, string> = { geometry: 'paths' };
     if (nodeIds?.length) params['ids'] = nodeIds.join(',');
 
-    const res = await this.http.get<FigmaFile>(`/files/${fileKey}`, { params });
+    const res = await withRetry(() => this.http.get<FigmaFile>(`/files/${fileKey}`, { params }));
     return res.data;
   }
 
@@ -37,16 +37,18 @@ export class FigmaClient {
     const result: Record<string, string | null> = {};
 
     for (const chunk of chunks) {
-      const res = await this.http.get<FigmaImageResponse>(`/images/${fileKey}`, {
-        params: {
-          ids: chunk.join(','),
-          format,
-          scale,
-          svg_include_id: true,
-          svg_simplify_stroke: true,
-          use_absolute_bounds: true,
-        },
-      });
+      const res = await withRetry(() =>
+        this.http.get<FigmaImageResponse>(`/images/${fileKey}`, {
+          params: {
+            ids: chunk.join(','),
+            format,
+            scale,
+            svg_include_id: true,
+            svg_simplify_stroke: true,
+            use_absolute_bounds: true,
+          },
+        })
+      );
 
       if (res.data.err) {
         logger.warn(`Figma image API returned error: ${res.data.err}`);
@@ -100,5 +102,29 @@ function chunkArray<T>(arr: T[], size: number): T[][] {
     chunks.push(arr.slice(i, i + size));
   }
   return chunks;
+}
+
+// Retry up to 3 times on 429 (rate limit) with exponential backoff
+async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    try {
+      return await fn();
+    } catch (err: any) {
+      lastErr = err;
+      const status = err?.response?.status;
+      if (status !== 429 || attempt === maxAttempts) throw err;
+
+      // Honour Retry-After header if Figma sends one, else exponential backoff
+      const retryAfter = err?.response?.headers?.['retry-after'];
+      const waitMs = retryAfter
+        ? parseInt(retryAfter, 10) * 1000
+        : Math.min(2 ** attempt * 1000, 16_000); // 2s, 4s, 8s …
+
+      logger.warn(`Figma API rate limited (429). Retrying in ${waitMs / 1000}s… (attempt ${attempt}/${maxAttempts})`);
+      await new Promise((res) => setTimeout(res, waitMs));
+    }
+  }
+  throw lastErr;
 }
 

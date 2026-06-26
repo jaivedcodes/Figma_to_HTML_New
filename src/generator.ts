@@ -261,6 +261,8 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 function friendlyFetchError(e: any, which: string): string {
   const status = e?.response?.status;
+  if (status === 429)
+    return `Figma API rate limit reached (429). Please wait 30–60 seconds and try again.`;
   if (status === 401 || status === 403)
     return `Figma token rejected (${status}). Ensure "File content → Read" scope is enabled on your token.`;
   if (status === 404)
