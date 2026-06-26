@@ -13,7 +13,7 @@ import { generateHTML } from './generators/html';
 import { generateCSS } from './generators/css';
 import { generateJS, needsJS } from './generators/js';
 import { generateReadme } from './generators/readme';
-import { GeneratorConfig } from './types/index';
+import { FigmaFile, GeneratorConfig } from './types/index';
 
 // ─────────────────────────────────────────────────────────────
 // Public types
@@ -52,7 +52,6 @@ export async function runGeneration(
   const emit       = onProgress;
   const emitInfo   = (m: string)                   => emit({ type: 'info',    message: m });
   const emitOk     = (m: string)                   => emit({ type: 'success', message: m });
-  const emitWarn   = (m: string)                   => emit({ type: 'warn',    message: m });
   const emitSec    = (m: string)                   => emit({ type: 'section', message: m });
   const emitPrev   = (m: string, d: Record<string, unknown>) => emit({ type: 'preview', message: m, data: d });
 
@@ -98,27 +97,20 @@ export async function runGeneration(
 
   const client = new FigmaClient(input.apiToken);
 
-  // ── 2. Fetch files ────────────────────────────────────────
+  // ── 2. Validate token + fetch files ───────────────────────
+  emitSec('Connecting to Figma');
+  try {
+    await withTimeout(client.validateToken(), 15_000, 'Token validation timed out');
+    emitOk('Figma token authenticated ✔');
+  } catch (e: any) {
+    throw new Error(friendlyFetchError(e, 'token'));
+  }
+
   emitSec('Fetching Figma Files');
-  let desktopFile, mobileFile;
-
-  try {
-    emitInfo('Fetching desktop file…');
-    desktopFile = await withTimeout(client.getFile(desktopInfo.fileKey), 120_000, 'Desktop file fetch timed out (120s)');
-    emitOk(`Desktop: "${desktopFile.name}"`);
-  } catch (e: any) {
-    throw new Error(friendlyFetchError(e, 'desktop'));
-  }
-
-  try {
-    emitInfo('Fetching mobile file…');
-    mobileFile = await withTimeout(client.getFile(mobileInfo.fileKey), 120_000, 'Mobile file fetch timed out (120s)');
-    emitOk(`Mobile: "${mobileFile.name}"`);
-  } catch (e: any) {
-    throw new Error(friendlyFetchError(e, 'mobile'));
-  }
-
-  emitOk('Figma token authenticated ✔');
+  const { desktopFile, mobileFile } = await fetchFigmaFiles(
+    client, desktopInfo.fileKey, mobileInfo.fileKey,
+    emitInfo, emitOk
+  );
 
   // ── 3. Parse designs ──────────────────────────────────────
   emitSec('Parsing Designs');
@@ -252,6 +244,39 @@ export async function runGeneration(
 // Helpers
 // ─────────────────────────────────────────────────────────────
 
+async function fetchFigmaFiles(
+  client: FigmaClient,
+  desktopKey: string,
+  mobileKey: string,
+  emitInfo: (m: string) => void,
+  emitOk:   (m: string) => void
+): Promise<{ desktopFile: FigmaFile; mobileFile: FigmaFile }> {
+  let desktopFile: FigmaFile;
+  try {
+    emitInfo('Fetching desktop file…');
+    desktopFile = await withTimeout(client.getFile(desktopKey), 180_000, 'Desktop file fetch timed out');
+    emitOk(`Desktop: "${desktopFile.name}"`);
+  } catch (e: any) {
+    throw new Error(friendlyFetchError(e, 'desktop'));
+  }
+
+  if (desktopKey === mobileKey) {
+    emitInfo('Mobile URL is the same file — reusing desktop response (1 API call saved)');
+    return { desktopFile, mobileFile: desktopFile };
+  }
+
+  let mobileFile: FigmaFile;
+  try {
+    emitInfo('Fetching mobile file…');
+    mobileFile = await withTimeout(client.getFile(mobileKey), 180_000, 'Mobile file fetch timed out');
+    emitOk(`Mobile: "${mobileFile.name}"`);
+  } catch (e: any) {
+    throw new Error(friendlyFetchError(e, 'mobile'));
+  }
+
+  return { desktopFile, mobileFile };
+}
+
 function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
   return Promise.race([
     promise,
@@ -267,7 +292,7 @@ function friendlyFetchError(e: any, which: string): string {
     return `Figma token rejected (${status}). Ensure "File content → Read" scope is enabled on your token.`;
   if (status === 404)
     return `${which} Figma file not found (404). Check the URL and confirm you have access.`;
-  if (e?.message?.includes('timeout') || e?.code === 'ECONNABORTED')
-    return `${which} file fetch timed out. Check your internet connection and try again.`;
+  if (e?.code === 'ECONNABORTED' || e?.message?.includes('timed out') || e?.message?.includes('timeout'))
+    return `Figma API timed out fetching the ${which} file. The file may be very large — please try again.`;
   return `Failed to fetch ${which} file: ${e?.message ?? e}`;
 }
