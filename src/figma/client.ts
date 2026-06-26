@@ -17,10 +17,12 @@ export class FigmaClient {
   }
 
   async getFile(fileKey: string, nodeIds?: string[]): Promise<FigmaFile> {
-    const params: Record<string, string> = { geometry: 'paths' };
+    const params: Record<string, string> = {};
     if (nodeIds?.length) params['ids'] = nodeIds.join(',');
 
-    const res = await withRetry(() => this.http.get<FigmaFile>(`/files/${fileKey}`, { params }));
+    const res = await withRetry(() =>
+      this.http.get<FigmaFile>(`/files/${fileKey}`, { params, timeout: 120_000 })
+    );
     return res.data;
   }
 
@@ -118,7 +120,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
       // Honour Retry-After header if Figma sends one, else exponential backoff
       const retryAfter = err?.response?.headers?.['retry-after'];
       const waitMs = retryAfter
-        ? parseInt(retryAfter, 10) * 1000
+        ? Number.parseInt(retryAfter, 10) * 1000
         : Math.min(2 ** attempt * 1000, 16_000); // 2s, 4s, 8s …
 
       logger.warn(`Figma API rate limited (429). Retrying in ${waitMs / 1000}s… (attempt ${attempt}/${maxAttempts})`);
