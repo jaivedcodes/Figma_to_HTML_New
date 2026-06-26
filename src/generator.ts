@@ -98,12 +98,24 @@ export async function runGeneration(
   const client = new FigmaClient(input.apiToken);
 
   // ── 2. Validate token + fetch files ───────────────────────
+  // Note: /me requires Profile scope. Fine-grained tokens with only "File content: Read"
+  // return 403 on /me but can still read files — so 403 here is non-fatal.
   emitSec('Connecting to Figma');
   try {
     await withTimeout(client.validateToken(), 15_000, 'Token validation timed out');
     emitOk('Figma token authenticated ✔');
   } catch (e: any) {
-    throw new Error(friendlyFetchError(e, 'token'));
+    const status = e?.response?.status;
+    if (status === 401) {
+      throw new Error('Figma token is invalid (401). Please generate a new token from Figma Settings → Security.');
+    }
+    if (status === 403) {
+      // Fine-grained token without profile scope — proceed and let the file fetch validate it
+      emitOk('Figma token accepted (file-scoped token detected)');
+    } else {
+      // Timeout or network error on /me — non-fatal, proceed to file fetch
+      emitOk('Figma token check skipped — proceeding to file fetch');
+    }
   }
 
   emitSec('Fetching Figma Files');
