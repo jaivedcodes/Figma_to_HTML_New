@@ -121,7 +121,7 @@ async function withRetry<T>(fn: () => Promise<T>, maxAttempts = 3): Promise<T> {
       const retryAfter = err?.response?.headers?.['retry-after'];
       const waitMs = retryAfter
         ? Number.parseInt(retryAfter, 10) * 1000
-        : Math.min(2 ** attempt * 1000, 16_000); // 2s, 4s, 8s …
+        : Math.min(2 ** (attempt + 2) * 1000, 60_000); // 8s, 16s, 32s …
 
       logger.warn(`Figma API rate limited (429). Retrying in ${waitMs / 1000}s… (attempt ${attempt}/${maxAttempts})`);
       await new Promise((res) => setTimeout(res, waitMs));
