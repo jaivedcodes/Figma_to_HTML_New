@@ -17,11 +17,14 @@ export class FigmaClient {
   }
 
   async getFile(fileKey: string, nodeIds?: string[]): Promise<FigmaFile> {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = {
+      depth:        '10',   // limit tree depth — reduces response size from ~100MB to <10MB
+      branch_data:  'false', // exclude branch metadata
+    };
     if (nodeIds?.length) params['ids'] = nodeIds.join(',');
 
     const res = await withRetry(() =>
-      this.http.get<FigmaFile>(`/files/${fileKey}`, { params, timeout: 120_000 })
+      this.http.get<FigmaFile>(`/files/${fileKey}`, { params, timeout: 180_000 })
     );
     return res.data;
   }
