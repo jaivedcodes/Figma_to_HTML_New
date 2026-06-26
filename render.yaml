@@ -1,0 +1,10 @@
+services:
+  - type: web
+    name: Figma_to_HTML_New
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: node dist/server.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+    autoDeploy: true
