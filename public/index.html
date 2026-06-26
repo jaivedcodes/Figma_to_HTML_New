@@ -1,0 +1,789 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Figma to HTML Generator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #0b0b14;
+      --bg-card:     #12121f;
+      --bg-input:    #1a1a2e;
+      --border:      #2a2a4a;
+      --border-focus:#7c3aed;
+      --purple:      #7c3aed;
+      --purple-light:#a78bfa;
+      --purple-glow: rgba(124,58,237,.25);
+      --green:       #10b981;
+      --red:         #ef4444;
+      --yellow:      #f59e0b;
+      --blue:        #3b82f6;
+      --cyan:        #06b6d4;
+      --text:        #e2e8f0;
+      --text-muted:  #64748b;
+      --text-dim:    #94a3b8;
+      --radius:      12px;
+      --radius-sm:   8px;
+    }
+
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem 4rem;
+    }
+
+    /* ── Header ─────────────────────────────────────────── */
+    .header { text-align: center; margin-bottom: 2.5rem; padding-top: 1rem; }
+    .header-badge {
+      display: inline-flex; align-items: center; gap: .5rem;
+      background: rgba(124,58,237,.15); border: 1px solid rgba(124,58,237,.35);
+      border-radius: 999px; padding: .3rem .9rem;
+      font-size: .75rem; font-weight: 600; color: var(--purple-light);
+      letter-spacing: .05em; text-transform: uppercase; margin-bottom: 1.25rem;
+    }
+    .header h1 {
+      font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 800;
+      background: linear-gradient(135deg, #fff 30%, var(--purple-light));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text; line-height: 1.15; margin-bottom: .75rem;
+    }
+    .header p { color: var(--text-dim); font-size: 1rem; max-width: 520px; margin: 0 auto; line-height: 1.7; }
+
+    /* ── Steps bar ──────────────────────────────────────── */
+    .steps-bar { display: flex; align-items: center; margin-bottom: 2rem; width: 100%; max-width: 580px; }
+    .step-item { display: flex; flex-direction: column; align-items: center; gap: .4rem; flex: 1; position: relative; }
+    .step-item:not(:last-child)::after {
+      content: ''; position: absolute; top: 14px;
+      left: calc(50% + 14px); right: calc(-50% + 14px);
+      height: 2px; background: var(--border); transition: background .4s;
+    }
+    .step-item.active::after, .step-item.done::after { background: var(--purple); }
+    .step-dot {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: 2px solid var(--border); background: var(--bg-card);
+      display: flex; align-items: center; justify-content: center;
+      font-size: .75rem; font-weight: 700; color: var(--text-muted);
+      transition: all .3s; position: relative; z-index: 1;
+    }
+    .step-item.active .step-dot { border-color: var(--purple); background: var(--purple); color: #fff; box-shadow: 0 0 0 4px var(--purple-glow); }
+    .step-item.done  .step-dot  { border-color: var(--green);  background: var(--green);  color: #fff; }
+    .step-label { font-size: .7rem; font-weight: 500; color: var(--text-muted); transition: color .3s; }
+    .step-item.active .step-label { color: var(--purple-light); }
+    .step-item.done  .step-label  { color: var(--green); }
+
+    /* ── Layout: side-by-side on wide screens ───────────── */
+    .main-layout {
+      display: flex; gap: 1.5rem; width: 100%; max-width: 1080px;
+      align-items: flex-start;
+    }
+    .col-form    { flex: 0 0 480px; min-width: 0; }
+    .col-preview { flex: 1; min-width: 0; display: none; }
+    .col-preview.show { display: block; }
+
+    /* ── Card ───────────────────────────────────────────── */
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 20px; padding: 2.5rem; width: 100%;
+      box-shadow: 0 20px 60px rgba(0,0,0,.4);
+    }
+
+    /* ── Form ───────────────────────────────────────────── */
+    .form { display: flex; flex-direction: column; gap: 1.25rem; }
+    .field { display: flex; flex-direction: column; gap: .5rem; }
+    label {
+      font-size: .8rem; font-weight: 600; color: var(--text-dim);
+      letter-spacing: .04em; text-transform: uppercase;
+      display: flex; align-items: center; gap: .4rem;
+    }
+    label .badge-req { font-size: .65rem; background: rgba(239,68,68,.22); color: #fca5a5; padding: 1px 6px; border-radius: 4px; font-weight: 500; text-transform: none; letter-spacing: 0; }
+    .input-wrap { position: relative; display: flex; align-items: center; }
+    .input-icon { position: absolute; left: .875rem; color: var(--text-muted); pointer-events: none; flex-shrink: 0; }
+    input {
+      width: 100%; background: var(--bg-input); border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm); padding: .75rem .875rem .75rem 2.5rem;
+      color: var(--text); font-family: 'Inter', sans-serif; font-size: .9rem;
+      outline: none; transition: border-color .2s, box-shadow .2s;
+    }
+    input::placeholder { color: var(--text-muted); }
+    input:focus { border-color: var(--border-focus); box-shadow: 0 0 0 3px var(--purple-glow); }
+    input.error { border-color: var(--red); }
+    .field-hint  { font-size: .75rem; color: var(--text-muted); margin-top: .1rem; }
+    .field-error { font-size: .75rem; color: var(--red); display: none; }
+    .field-error.show { display: block; }
+    .toggle-vis {
+      position: absolute; right: .875rem; background: none; border: none;
+      cursor: pointer; color: var(--text-muted); padding: 0;
+      display: flex; align-items: center; transition: color .2s;
+    }
+    .toggle-vis:hover { color: var(--purple-light); }
+
+    /* ── Generate button ────────────────────────────────── */
+    .btn-generate {
+      margin-top: .5rem; width: 100%; padding: .9rem;
+      background: var(--purple); border: none; border-radius: var(--radius-sm);
+      color: #fff; font-family: 'Inter', sans-serif; font-size: 1rem; font-weight: 700;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: .6rem;
+      transition: all .2s;
+    }
+    .btn-generate:hover:not(:disabled) { background: #6d28d9; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(124,58,237,.4); }
+    .btn-generate:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+    .spinner { width: 18px; height: 18px; border: 2.5px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; animation: spin .7s linear infinite; display: none; }
+    .btn-generate.loading .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .divider { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+
+    /* ── Progress (inside form card) ────────────────────── */
+    #progress-panel { display: none; }
+    #progress-panel.show { display: block; }
+    .progress-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: .75rem; }
+    .progress-title { font-size: .8rem; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: .05em; }
+    .progress-badge { font-size: .7rem; font-weight: 600; padding: .2rem .6rem; border-radius: 999px; }
+    .progress-badge.running { background: rgba(124,58,237,.2); color: var(--purple-light); animation: pulse 1.5s infinite; }
+    .progress-badge.done    { background: rgba(16,185,129,.2);  color: var(--green); }
+    .progress-badge.error   { background: rgba(239,68,68,.2);   color: var(--red); }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.5} }
+
+    .log-box {
+      background: #080810; border: 1px solid var(--border); border-radius: var(--radius-sm);
+      padding: .875rem; height: 220px; overflow-y: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: .75rem; line-height: 1.7;
+    }
+    .log-box::-webkit-scrollbar { width: 4px; }
+    .log-box::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .log-line { display: flex; gap: .5rem; }
+    .log-prefix { flex-shrink: 0; }
+    .log-prefix.section { color: var(--purple-light); }
+    .log-prefix.success { color: var(--green); }
+    .log-prefix.info    { color: var(--blue); }
+    .log-prefix.warn    { color: var(--yellow); }
+    .log-prefix.error   { color: var(--red); }
+    .log-prefix.done    { color: var(--green); }
+    .log-msg            { color: var(--text-dim); word-break: break-all; }
+    .log-msg.section    { color: #fff; font-weight: 600; }
+    .log-msg.done       { color: var(--green); font-weight: 600; }
+    .log-msg.error      { color: var(--red); }
+
+    /* ── Error ──────────────────────────────────────────── */
+    #error-panel { display: none; margin-top: 1rem; background: rgba(239,68,68,.07); border: 1px solid rgba(239,68,68,.25); border-radius: var(--radius-sm); padding: 1rem; }
+    #error-panel.show { display: block; }
+    #error-panel p { font-size: .875rem; color: var(--red); line-height: 1.6; }
+
+    /* ── Download ───────────────────────────────────────── */
+    #download-panel { display: none; }
+    #download-panel.show { display: flex; flex-direction: column; gap: 1rem; margin-top: 1.5rem; }
+    .result-card { background: rgba(16,185,129,.07); border: 1px solid rgba(16,185,129,.25); border-radius: var(--radius-sm); padding: 1.25rem; }
+    .result-card h3 { font-size: .95rem; color: var(--green); font-weight: 700; margin-bottom: .75rem; }
+    .result-stats { display: flex; flex-wrap: wrap; gap: .5rem; }
+    .stat-chip { background: rgba(255,255,255,.05); border: 1px solid var(--border); border-radius: 6px; padding: .3rem .7rem; font-size: .75rem; color: var(--text-dim); }
+    .btn-download {
+      width: 100%; padding: .9rem; background: var(--green); border: none;
+      border-radius: var(--radius-sm); color: #fff; font-family: 'Inter', sans-serif;
+      font-size: 1rem; font-weight: 700; cursor: pointer;
+      display: flex; align-items: center; justify-content: center; gap: .6rem;
+      text-decoration: none; transition: all .2s;
+    }
+    .btn-download:hover { background: #059669; transform: translateY(-1px); box-shadow: 0 8px 24px rgba(16,185,129,.35); }
+    .btn-restart { width: 100%; padding: .7rem; background: transparent; border: 1.5px solid var(--border); border-radius: var(--radius-sm); color: var(--text-muted); font-family: 'Inter', sans-serif; font-size: .875rem; font-weight: 500; cursor: pointer; transition: all .2s; }
+    .btn-restart:hover { border-color: var(--purple); color: var(--purple-light); }
+
+    /* ── Preview Panel ──────────────────────────────────── */
+    .preview-card { background: var(--bg-card); border: 1px solid var(--border); border-radius: 20px; padding: 1.75rem; box-shadow: 0 20px 60px rgba(0,0,0,.4); }
+    .preview-card h2 { font-size: .9rem; font-weight: 700; color: var(--text-dim); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 1.25rem; display: flex; align-items: center; gap: .5rem; }
+    .preview-card h2 span { color: var(--purple-light); }
+
+    /* Overall progress bar */
+    .overall-progress { margin-bottom: 1.5rem; }
+    .progress-label { display: flex; justify-content: space-between; font-size: .75rem; color: var(--text-muted); margin-bottom: .4rem; }
+    .progress-bar-track { height: 4px; background: var(--border); border-radius: 999px; overflow: hidden; }
+    .progress-bar-fill { height: 100%; background: linear-gradient(90deg, var(--purple), var(--purple-light)); border-radius: 999px; transition: width .4s ease; width: 0%; }
+
+    /* Pipeline steps */
+    .pipeline { display: flex; flex-direction: column; gap: .5rem; margin-bottom: 1.5rem; }
+    .pipe-step { display: flex; align-items: center; gap: .75rem; padding: .6rem .75rem; border-radius: var(--radius-sm); background: rgba(255,255,255,.02); border: 1px solid transparent; transition: all .3s; }
+    .pipe-step.active { background: rgba(124,58,237,.08); border-color: rgba(124,58,237,.25); }
+    .pipe-step.done   { background: rgba(16,185,129,.06);  border-color: rgba(16,185,129,.2); }
+    .pipe-step.error  { background: rgba(239,68,68,.06);   border-color: rgba(239,68,68,.2); }
+    .pipe-icon { width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: .75rem; flex-shrink: 0; background: var(--border); color: var(--text-muted); transition: all .3s; }
+    .pipe-step.active .pipe-icon { background: var(--purple); color: #fff; animation: pulse 1.2s infinite; }
+    .pipe-step.done   .pipe-icon { background: var(--green);  color: #fff; }
+    .pipe-step.error  .pipe-icon { background: var(--red);    color: #fff; }
+    .pipe-label { font-size: .82rem; font-weight: 500; color: var(--text-muted); flex: 1; }
+    .pipe-step.active .pipe-label { color: var(--purple-light); }
+    .pipe-step.done   .pipe-label { color: var(--text-dim); }
+    .pipe-sub { font-size: .7rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+    .pipe-step.active .pipe-sub { color: var(--purple-light); opacity: .7; }
+
+    /* Sections preview */
+    .sections-preview { margin-bottom: 1.5rem; }
+    .sections-preview h3 { font-size: .75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem; }
+    .section-cards { display: flex; flex-direction: column; gap: .4rem; }
+    .section-card { display: flex; align-items: center; gap: .6rem; padding: .5rem .75rem; background: rgba(255,255,255,.03); border: 1px solid var(--border); border-radius: 6px; animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from { opacity:0; transform: translateY(4px); } to { opacity:1; transform: translateY(0); } }
+    .section-tag { font-size: .65rem; font-weight: 700; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; letter-spacing: .04em; flex-shrink: 0; }
+    .section-tag.header  { background: rgba(59,130,246,.2);  color: var(--blue); }
+    .section-tag.footer  { background: rgba(107,114,128,.2); color: #d1d5db; }
+    .section-tag.nav     { background: rgba(6,182,212,.2);   color: var(--cyan); }
+    .section-tag.section { background: rgba(124,58,237,.2);  color: var(--purple-light); }
+    .section-tag.main    { background: rgba(16,185,129,.2);  color: var(--green); }
+    .section-tag.article { background: rgba(245,158,11,.2);  color: var(--yellow); }
+    .section-tag.aside   { background: rgba(239,68,68,.2);   color: var(--red); }
+    .section-name { font-size: .8rem; color: var(--text-dim); }
+
+    /* Asset chips */
+    .asset-preview { margin-bottom: 1.5rem; }
+    .asset-preview h3 { font-size: .75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .75rem; }
+    .asset-summary { display: flex; gap: .75rem; flex-wrap: wrap; margin-bottom: .75rem; }
+    .asset-chip { display: flex; align-items: center; gap: .35rem; background: rgba(255,255,255,.04); border: 1px solid var(--border); border-radius: 999px; padding: .3rem .7rem; font-size: .75rem; color: var(--text-dim); }
+    .asset-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+    .dot-img  { background: var(--blue); }
+    .dot-icon { background: var(--cyan); }
+    .asset-list { display: flex; flex-direction: column; gap: .3rem; max-height: 120px; overflow-y: auto; }
+    .asset-list::-webkit-scrollbar { width: 3px; }
+    .asset-list::-webkit-scrollbar-thumb { background: var(--border); }
+    .asset-item { font-size: .72rem; font-family: 'JetBrains Mono', monospace; color: var(--text-muted); padding: .2rem .4rem; border-radius: 4px; animation: fadeIn .2s ease; }
+    .asset-item.image { color: #93c5fd; }
+    .asset-item.icon  { color: #67e8f9; }
+
+    /* Font badges */
+    .font-preview h3 { font-size: .75rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; margin-bottom: .6rem; }
+    .font-tags { display: flex; flex-wrap: wrap; gap: .4rem; }
+    .font-tag { background: rgba(245,158,11,.1); border: 1px solid rgba(245,158,11,.25); color: var(--yellow); font-size: .75rem; padding: .25rem .6rem; border-radius: 999px; }
+
+    /* ── Footer ─────────────────────────────────────────── */
+    .footer { margin-top: 3rem; text-align: center; font-size: .75rem; color: var(--text-muted); line-height: 1.8; }
+
+    @media (max-width: 900px) {
+      .main-layout { flex-direction: column; }
+      .col-form { flex: none; width: 100%; max-width: 560px; }
+      .col-preview { width: 100%; max-width: 560px; }
+    }
+    @media (max-width: 600px) { .card { padding: 1.5rem; } .header h1 { font-size: 1.6rem; } }
+  </style>
+</head>
+<body>
+
+  <header class="header">
+    <div class="header-badge">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Figma → HTML Generator
+    </div>
+    <h1>Convert Figma to<br>Pixel-Perfect HTML</h1>
+    <p>Paste your Figma design links and API token. We'll generate a fully responsive, Bootstrap-based HTML project ready to download.</p>
+  </header>
+
+  <!-- Step indicator -->
+  <div class="steps-bar" id="steps-bar">
+    <div class="step-item active" id="step-1"><div class="step-dot">1</div><span class="step-label">Configure</span></div>
+    <div class="step-item"        id="step-2"><div class="step-dot">2</div><span class="step-label">Generating</span></div>
+    <div class="step-item"        id="step-3"><div class="step-dot">✓</div><span class="step-label">Download</span></div>
+  </div>
+
+  <div class="main-layout">
+
+    <!-- ── Left: Form ────────────────────────────────────── -->
+    <div class="col-form">
+      <div class="card">
+
+        <form class="form" id="gen-form" novalidate>
+          <!-- Desktop URL -->
+          <div class="field">
+            <label for="desktop-url">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+              Desktop Figma URL <span class="badge-req">Required</span>
+            </label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <input type="url" id="desktop-url" placeholder="https://www.figma.com/design/…" autocomplete="off" spellcheck="false">
+            </div>
+            <span class="field-error" id="desktop-url-error">Please enter a valid Figma URL.</span>
+          </div>
+
+          <!-- Mobile URL -->
+          <div class="field">
+            <label for="mobile-url">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M12 18h.01"/></svg>
+              Mobile Figma URL <span class="badge-req">Required</span>
+            </label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+              <input type="url" id="mobile-url" placeholder="https://www.figma.com/design/…" autocomplete="off" spellcheck="false">
+            </div>
+            <span class="field-error" id="mobile-url-error">Please enter a valid Figma URL.</span>
+          </div>
+
+          <!-- Token -->
+          <div class="field">
+            <label for="api-token">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+              Figma Access Token <span class="badge-req">Required</span>
+            </label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+              <input type="password" id="api-token" placeholder="figd_…" autocomplete="off" spellcheck="false">
+              <button type="button" class="toggle-vis" id="toggle-token" aria-label="Show/hide token">
+                <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+              </button>
+            </div>
+            <span class="field-hint">Figma → Settings → Security → Personal access tokens → File content: Read</span>
+            <span class="field-error" id="token-error">Token is required.</span>
+          </div>
+
+          <!-- Project name -->
+          <div class="field">
+            <label for="project-name">
+              <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+              Project Name
+            </label>
+            <div class="input-wrap">
+              <svg class="input-icon" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              <input type="text" id="project-name" placeholder="my-website" value="my-website">
+            </div>
+            <span class="field-hint">ZIP file name and output folder name.</span>
+          </div>
+
+          <button type="submit" class="btn-generate" id="btn-generate">
+            <span class="spinner" id="btn-spinner"></span>
+            <svg id="btn-icon" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+            <span id="btn-text">Generate HTML</span>
+          </button>
+        </form>
+
+        <!-- Progress log -->
+        <div id="progress-panel">
+          <hr class="divider">
+          <div class="progress-header">
+            <span class="progress-title">Live Log</span>
+            <span class="progress-badge running" id="progress-badge">Running…</span>
+          </div>
+          <div class="log-box" id="log-box"></div>
+        </div>
+
+        <!-- Error -->
+        <div id="error-panel"><p id="error-text"></p></div>
+
+        <!-- Download -->
+        <div id="download-panel">
+          <div class="result-card">
+            <h3>✓ Your project is ready!</h3>
+            <div class="result-stats" id="result-stats"></div>
+          </div>
+          <a class="btn-download" id="btn-download" href="#" download>
+            <svg width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download ZIP
+          </a>
+          <button type="button" class="btn-restart" id="btn-restart">Generate Another Project</button>
+        </div>
+
+      </div><!-- /card -->
+    </div><!-- /col-form -->
+
+    <!-- ── Right: Live Preview ────────────────────────────── -->
+    <div class="col-preview" id="col-preview">
+      <div class="preview-card">
+        <h2>
+          <svg width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          Live Preview <span id="preview-status">— generating…</span>
+        </h2>
+
+        <!-- Overall progress bar -->
+        <div class="overall-progress">
+          <div class="progress-label">
+            <span id="progress-step-label">Starting…</span>
+            <span id="progress-pct">0%</span>
+          </div>
+          <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-bar"></div></div>
+        </div>
+
+        <!-- Pipeline steps -->
+        <div class="pipeline" id="pipeline">
+          <div class="pipe-step" data-key="connect">  <div class="pipe-icon">🔌</div><div><div class="pipe-label">Connect to Figma</div><div class="pipe-sub" id="pipe-sub-connect"></div></div></div>
+          <div class="pipe-step" data-key="fetch">    <div class="pipe-icon">📥</div><div><div class="pipe-label">Fetch Files</div><div class="pipe-sub" id="pipe-sub-fetch"></div></div></div>
+          <div class="pipe-step" data-key="parse">    <div class="pipe-icon">🔍</div><div><div class="pipe-label">Parse Designs</div><div class="pipe-sub" id="pipe-sub-parse"></div></div></div>
+          <div class="pipe-step" data-key="assets">   <div class="pipe-icon">🖼</div><div><div class="pipe-label">Download Assets</div><div class="pipe-sub" id="pipe-sub-assets"></div></div></div>
+          <div class="pipe-step" data-key="optimize"> <div class="pipe-icon">⚡</div><div><div class="pipe-label">Optimize (WebP / SVG)</div><div class="pipe-sub" id="pipe-sub-optimize"></div></div></div>
+          <div class="pipe-step" data-key="html">     <div class="pipe-icon">📄</div><div><div class="pipe-label">Generate HTML + CSS + JS</div><div class="pipe-sub" id="pipe-sub-html"></div></div></div>
+          <div class="pipe-step" data-key="done">     <div class="pipe-icon">✅</div><div><div class="pipe-label">Done — Ready to Download</div><div class="pipe-sub" id="pipe-sub-done"></div></div></div>
+        </div>
+
+        <!-- Detected sections -->
+        <div class="sections-preview" id="sections-preview" style="display:none">
+          <h3>Detected Sections</h3>
+          <div class="section-cards" id="section-cards"></div>
+        </div>
+
+        <!-- Assets -->
+        <div class="asset-preview" id="asset-preview" style="display:none">
+          <h3>Assets</h3>
+          <div class="asset-summary" id="asset-summary"></div>
+          <div class="asset-list" id="asset-list"></div>
+        </div>
+
+        <!-- Fonts -->
+        <div class="font-preview" id="font-preview" style="display:none">
+          <h3>Detected Fonts</h3>
+          <div class="font-tags" id="font-tags"></div>
+        </div>
+
+      </div>
+    </div><!-- /col-preview -->
+
+  </div><!-- /main-layout -->
+
+  <footer class="footer">
+    <p>Bootstrap 5.3.3 &nbsp;·&nbsp; Sharp (WebP) &nbsp;·&nbsp; SVGO &nbsp;·&nbsp; Figma REST API</p>
+    <p style="margin-top:.3rem">Your Figma token is sent only to the Figma API and is never stored on any server.</p>
+  </footer>
+
+  <script>
+    /* ─── State ──────────────────────────────────────────── */
+    const PIPELINE_KEYS = ['connect','fetch','parse','assets','optimize','html','done'];
+    const SECTION_KEYWORDS = {
+      'Connecting to Figma':       'connect',
+      'Fetching Figma Files':      'fetch',
+      'Parsing Designs':           'parse',
+      'Extracting Assets':         'assets',
+      'Downloading Assets':        'assets',
+      'Optimizing Assets':         'optimize',
+      'Detecting Fonts':           'optimize',
+      'Generating HTML':           'html',
+      'Generating CSS':            'html',
+      'Generating JavaScript':     'html',
+      'Generating README':         'html',
+    };
+    let currentPipeKey = null;
+
+    /* ─── Elements ───────────────────────────────────────── */
+    const form          = document.getElementById('gen-form');
+    const btnGenerate   = document.getElementById('btn-generate');
+    const btnText       = document.getElementById('btn-text');
+    const btnIcon       = document.getElementById('btn-icon');
+    const btnSpinner    = document.getElementById('btn-spinner');
+    const progressPanel = document.getElementById('progress-panel');
+    const progressBadge = document.getElementById('progress-badge');
+    const logBox        = document.getElementById('log-box');
+    const downloadPanel = document.getElementById('download-panel');
+    const btnDownload   = document.getElementById('btn-download');
+    const btnRestart    = document.getElementById('btn-restart');
+    const errorPanel    = document.getElementById('error-panel');
+    const errorText     = document.getElementById('error-text');
+    const resultStats   = document.getElementById('result-stats');
+    const tokenInput    = document.getElementById('api-token');
+    const colPreview    = document.getElementById('col-preview');
+    const progressBar   = document.getElementById('progress-bar');
+    const progressPct   = document.getElementById('progress-pct');
+    const progressLabel = document.getElementById('progress-step-label');
+    const previewStatus = document.getElementById('preview-status');
+
+    /* ─── Steps ──────────────────────────────────────────── */
+    function setStep(n) {
+      [1,2,3].forEach(i => {
+        const el = document.getElementById('step-' + i);
+        el.classList.remove('active','done');
+        if (i < n)  el.classList.add('done');
+        if (i === n) el.classList.add('active');
+      });
+    }
+
+    /* ─── Pipeline ───────────────────────────────────────── */
+    function setPipeActive(key) {
+      if (currentPipeKey === key) return;
+      if (currentPipeKey) setPipeDone(currentPipeKey);
+      currentPipeKey = key;
+      const el = document.querySelector(`.pipe-step[data-key="${key}"]`);
+      if (el) el.className = 'pipe-step active';
+      const idx = PIPELINE_KEYS.indexOf(key);
+      const pct = Math.round((idx / (PIPELINE_KEYS.length - 1)) * 100);
+      progressBar.style.width = pct + '%';
+      progressPct.textContent  = pct + '%';
+      progressLabel.textContent = el ? el.querySelector('.pipe-label').textContent : key;
+    }
+
+    function setPipeDone(key) {
+      const el = document.querySelector(`.pipe-step[data-key="${key}"]`);
+      if (el) el.className = 'pipe-step done';
+    }
+
+    function setPipeError(key) {
+      const el = key
+        ? document.querySelector(`.pipe-step[data-key="${key}"]`)
+        : null;
+      if (el) el.className = 'pipe-step error';
+    }
+
+    function setPipeSub(key, txt) {
+      const el = document.getElementById('pipe-sub-' + key);
+      if (el) el.textContent = txt;
+    }
+
+    /* ─── Log append ─────────────────────────────────────── */
+    const PREFIX = { section:'▶', success:'✔', info:'ℹ', warn:'⚠', error:'✖', done:'✔', preview:'·' };
+    function appendLog(evt) {
+      if (evt.type === 'preview') return; // preview events go to preview panel only
+      const line = document.createElement('div');
+      line.className = 'log-line';
+      const pre = document.createElement('span');
+      pre.className = 'log-prefix ' + evt.type;
+      pre.textContent = PREFIX[evt.type] || '·';
+      const msg = document.createElement('span');
+      msg.className = 'log-msg ' + (evt.type === 'section' || evt.type === 'done' ? evt.type : '');
+      msg.textContent = evt.message;
+      line.appendChild(pre);
+      line.appendChild(msg);
+      logBox.appendChild(line);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    /* ─── Section event → pipeline sync ─────────────────── */
+    function handleSectionEvent(msg) {
+      const key = SECTION_KEYWORDS[msg];
+      if (key) setPipeActive(key);
+    }
+
+    function handleSuccessEvent(msg) {
+      if (currentPipeKey) setPipeSub(currentPipeKey, msg);
+    }
+
+    /* ─── Preview data handler ───────────────────────────── */
+    function handlePreview(evt) {
+      const d = evt.data || {};
+      if (evt.message === 'sections' && d.desktop) {
+        renderSections(d.desktop);
+      }
+      if (evt.message === 'assets') {
+        renderAssets(d);
+      }
+      if (evt.message === 'fonts' && d.families) {
+        renderFonts(d.families);
+      }
+    }
+
+    function renderSections(sections) {
+      const container = document.getElementById('section-cards');
+      container.innerHTML = '';
+      sections.forEach(s => {
+        const card = document.createElement('div');
+        card.className = 'section-card';
+        card.innerHTML = `<span class="section-tag ${s.tag}">${s.tag}</span><span class="section-name">${escHtml(s.name)}</span>`;
+        container.appendChild(card);
+      });
+      document.getElementById('sections-preview').style.display = 'block';
+    }
+
+    function renderAssets(d) {
+      const summary = document.getElementById('asset-summary');
+      summary.innerHTML = `
+        <div class="asset-chip"><div class="dot dot-img"></div>${d.images || 0} images</div>
+        <div class="asset-chip"><div class="dot dot-icon"></div>${d.icons || 0} icons</div>
+        <div class="asset-chip">${d.total || 0} total</div>`;
+      const list = document.getElementById('asset-list');
+      list.innerHTML = '';
+      (d.list || []).slice(0, 20).forEach(a => {
+        const el = document.createElement('div');
+        el.className = 'asset-item ' + (a.type === 'icon' || a.type === 'logo' ? 'icon' : 'image');
+        el.textContent = a.name;
+        list.appendChild(el);
+      });
+      document.getElementById('asset-preview').style.display = 'block';
+    }
+
+    function renderFonts(families) {
+      const tags = document.getElementById('font-tags');
+      tags.innerHTML = families.map(f => `<span class="font-tag">${escHtml(f)}</span>`).join('');
+      document.getElementById('font-preview').style.display = 'block';
+    }
+
+    /* ─── Token toggle ───────────────────────────────────── */
+    document.getElementById('toggle-token').addEventListener('click', () => {
+      tokenInput.type = tokenInput.type === 'password' ? 'text' : 'password';
+    });
+
+    /* ─── Validation ─────────────────────────────────────── */
+    function isFigmaUrl(v) {
+      return v.includes('figma.com') && (v.includes('/file/') || v.includes('/design/') || v.includes('/proto/'));
+    }
+    function showErr(fid, eid, show) {
+      document.getElementById(fid).classList.toggle('error', show);
+      document.getElementById(eid).classList.toggle('show', show);
+    }
+    function validate() {
+      const d = document.getElementById('desktop-url').value.trim();
+      const m = document.getElementById('mobile-url').value.trim();
+      const t = tokenInput.value.trim();
+      let ok = true;
+      if (isFigmaUrl(d)) { showErr('desktop-url','desktop-url-error',false); } else { showErr('desktop-url','desktop-url-error',true); ok=false; }
+      if (isFigmaUrl(m)) { showErr('mobile-url','mobile-url-error',false);   } else { showErr('mobile-url','mobile-url-error',true);   ok=false; }
+      if (t.length < 10)  { showErr('api-token','token-error',true);          ok=false; } else showErr('api-token','token-error',false);
+      return ok;
+    }
+
+    /* ─── Submit ─────────────────────────────────────────── */
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      if (!validate()) return;
+
+      const payload = {
+        desktopUrl:  document.getElementById('desktop-url').value.trim(),
+        mobileUrl:   document.getElementById('mobile-url').value.trim(),
+        apiToken:    tokenInput.value.trim(),
+        projectName: document.getElementById('project-name').value.trim() || 'my-website',
+      };
+
+      // UI: start state
+      btnGenerate.disabled = true;
+      btnGenerate.classList.add('loading');
+      btnSpinner.style.display = 'block';
+      btnIcon.style.display = 'none';
+      btnText.textContent = 'Starting…';
+
+      logBox.innerHTML = '';
+      progressPanel.classList.add('show');
+      progressBadge.textContent = 'Running…';
+      progressBadge.className = 'progress-badge running';
+      downloadPanel.classList.remove('show');
+      errorPanel.classList.remove('show');
+
+      // Show preview panel
+      colPreview.classList.add('show');
+      previewStatus.textContent = '— generating…';
+      progressBar.style.width = '0%';
+      progressPct.textContent = '0%';
+      document.getElementById('sections-preview').style.display = 'none';
+      document.getElementById('asset-preview').style.display = 'none';
+      document.getElementById('font-preview').style.display = 'none';
+      document.getElementById('section-cards').innerHTML = '';
+      document.getElementById('asset-list').innerHTML = '';
+      document.getElementById('font-tags').innerHTML = '';
+      PIPELINE_KEYS.forEach(k => {
+        const el = document.querySelector(`.pipe-step[data-key="${k}"]`);
+        if (el) el.className = 'pipe-step';
+        const sub = document.getElementById('pipe-sub-' + k);
+        if (sub) sub.textContent = '';
+      });
+      currentPipeKey = null;
+      setStep(2);
+
+      // Start job
+      let jobId;
+      try {
+        const res  = await fetch('/api/generate', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload) });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Server error');
+        jobId = data.jobId;
+      } catch (err) {
+        showFatalError(err.message); return;
+      }
+
+      btnText.textContent = 'Generating…';
+
+      // SSE stream
+      const es = new EventSource('/api/progress/' + jobId);
+      es.onmessage = (e) => {
+        const evt = JSON.parse(e.data);
+        appendLog(evt);
+
+        if (evt.type === 'section') { handleSectionEvent(evt.message); }
+        if (evt.type === 'success') { handleSuccessEvent(evt.message); }
+        if (evt.type === 'preview') { handlePreview(evt); }
+
+        if (evt.type === 'done') {
+          es.close();
+          onDone(jobId, payload.projectName, evt.data);
+        }
+        if (evt.type === 'error') {
+          es.close();
+          showFatalError(evt.message);
+        }
+      };
+      es.onerror = () => { es.close(); pollStatus(jobId, payload.projectName); };
+    });
+
+    /* ─── Poll fallback ──────────────────────────────────── */
+    function pollStatus(jobId, projectName) {
+      const iv = setInterval(async () => {
+        const res  = await fetch('/api/status/' + jobId);
+        const data = await res.json();
+        if (data.status === 'done')  { clearInterval(iv); onDone(jobId, projectName, {}); }
+        if (data.status === 'error') { clearInterval(iv); showFatalError(data.error); }
+      }, 1500);
+    }
+
+    /* ─── Generation done ────────────────────────────────── */
+    function onDone(jobId, projectName, data) {
+      // Finish pipeline
+      setPipeActive('done');
+      setPipeDone('done');
+      progressBar.style.width = '100%';
+      progressPct.textContent = '100%';
+      previewStatus.textContent = '— complete ✔';
+
+      progressBadge.textContent = 'Complete ✔';
+      progressBadge.className = 'progress-badge done';
+      btnGenerate.disabled = false;
+      btnGenerate.classList.remove('loading');
+      btnSpinner.style.display = 'none';
+      btnIcon.style.display = 'block';
+      btnText.textContent = 'Generate HTML';
+
+      btnDownload.href = '/api/download/' + jobId;
+      btnDownload.setAttribute('download', (projectName || 'website') + '.zip');
+
+      // Stats chips
+      const d = data || {};
+      const chips = [
+        d.sections ? `${d.sections} sections`  : null,
+        d.assets   ? `${d.assets} assets`       : null,
+        d.fonts    ? `${d.fonts} fonts`          : null,
+        'Bootstrap 5.3.3',
+        '7 breakpoints',
+      ].filter(Boolean);
+      resultStats.innerHTML = chips.map(c => `<span class="stat-chip">${c}</span>`).join('');
+
+      downloadPanel.classList.add('show');
+      setStep(3);
+    }
+
+    /* ─── Error state ────────────────────────────────────── */
+    function showFatalError(msg) {
+      setPipeError(currentPipeKey);
+      previewStatus.textContent = '— failed';
+      progressBadge.textContent = 'Failed';
+      progressBadge.className = 'progress-badge error';
+      btnGenerate.disabled = false;
+      btnGenerate.classList.remove('loading');
+      btnSpinner.style.display = 'none';
+      btnIcon.style.display = 'block';
+      btnText.textContent = 'Try Again';
+      errorText.textContent = msg;
+      errorPanel.classList.add('show');
+      setStep(1);
+    }
+
+    /* ─── Restart ────────────────────────────────────────── */
+    btnRestart.addEventListener('click', () => {
+      progressPanel.classList.remove('show');
+      downloadPanel.classList.remove('show');
+      errorPanel.classList.remove('show');
+      colPreview.classList.remove('show');
+      logBox.innerHTML = '';
+      btnText.textContent = 'Generate HTML';
+      btnIcon.style.display = 'block';
+      setStep(1);
+      document.getElementById('desktop-url').focus();
+    });
+
+    /* ─── Util ───────────────────────────────────────────── */
+    function escHtml(s) { return s.replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'); }
+  </script>
+</body>
+</html>
